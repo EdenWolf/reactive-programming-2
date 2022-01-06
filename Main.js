@@ -1,9 +1,9 @@
 const client = require("./Client");
 
 const inputFilesPaths = [
-  "./Input/input-file-1.txt",
-  "./Input/input-file-2.txt",
   "./Input/input-file-3.txt",
+  "./Input/input-file-2.txt",
+  "./Input/input-file-1.txt",
 ];
 
 var fs = require("fs");
