@@ -1,80 +1,77 @@
 const WebSocket = require("ws");
 
-const client = {
-  // Initial time stemp
-  id: -1,
-  str: "",
-  TS: [0, -1],
-  server: undefined,
-  portNumber: -1,
-  clientsMap: new Map(),
-  messagesTypes: {
-    connection: "connection",
-    goodbye: "googbye",
-    update: "update",
-  },
-  operationTypes: {
-    insert: "insert",
-    delete: "delete",
-  },
-  messageTypeHandler: {
+const messagesTypes = {
+  connection: "connection",
+  goodbye: "googbye",
+  update: "update",
+};
+
+const operationTypes = {
+  insert: "insert",
+  delete: "delete",
+};
+
+module.exports = class Client {
+  constructor(id, str, portNumber, clientsList, stringOperations) {
+    this.id = id;
+    this.str = str;
+    this.portNumber = portNumber;
+    this.clientsList = clientsList;
+    this.stringOperations = stringOperations;
+    this.ts = [0, id];
+    this.server = undefined;
+    this.clientsMap = new Map();
+
+    console.log("created client: " + portNumber);
+  }
+
+  messageTypeHandler = {
     connection: (data) => {
       console.log(data);
     },
     goodbye: (data) => {
       console.log(data);
     },
-    // insert: (data) => {
-    //   console.log(data);
-    //   clientsMap.forEach((value) => {
-    //     if (value.socket != undefined) {
-    //       value.socket.send(
-    //         JSON.stringify({ id: id, type: this.operationTypes.update })
-    //       );
-    //     }
-    //   });
-    // },
     update: (data) => {
       console.log(data);
     },
-  },
-  handleMessage: function (data) {
+  };
+
+  handleMessage(data) {
     this.messageTypeHandler[data.type](data);
     console.log(this.portNumber);
 
     // TS[0] = Math.max(TS[0], data.ts[0]);
     // TS[0]++;
-  },
-  // Create the server
-  createServer: async function (id, portNum) {
-    this.id = id;
-    this.portNumber = portNum;
-    this.TS[1] = id;
-    console.log("port: " + this.portNumber);
+  }
+
+  async createServer() {
     this.server = new WebSocket.Server({ port: this.portNumber });
-    console.log("server created");
+    console.log("server created: " + this.portNumber);
     this.server.on("connection", (serverSocket) => {
       serverSocket.on("message", (message) => {
         this.handleMessage(JSON.parse(message));
       });
     });
-  },
-  connectToOtherClients: async function (id, clientsList) {
+  }
+
+  async connectToOtherClients() {
     // Create array with all the information about the othere clients
+    console.log("connect: " + this.portNumber);
     const biggerClients = new Map();
 
-    for (let i = 0; i < clientsList.length; i++) {
-      const clientData = clientsList[i].split(" ");
+    this.clientsList.forEach((otherClient) => {
+      const clientData = otherClient.split(" ");
       const newClient = {
         host: clientData[1],
         port: clientData[2],
         socket: undefined,
       };
       this.clientsMap.set(clientData[0], newClient);
-      if (clientData[0] > id) {
+      if (clientData[0] > this.id) {
         biggerClients.set(clientData[0], newClient);
       }
-    }
+    });
 
     // Connect to clients with bigger id
     biggerClients.forEach((value) => {
@@ -82,7 +79,7 @@ const client = {
 
       socket.onopen = () => {
         socket.send(
-          JSON.stringify({ id: id, type: this.messagesTypes.connection })
+          JSON.stringify({ id: this.id, type: messagesTypes.connection })
         );
         value.socket = socket;
       };
@@ -96,56 +93,40 @@ const client = {
         TS++;
       };
     });
-  },
-  sleep: (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
-  startClient: async function (str, stringOperations) {},
-};
+  }
 
-async function startClient(id, portNumber, str, clientsList, stringOperations) {
-  const sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay));
+  async sleep(delay) {
+    new Promise((resolve) => setTimeout(resolve, delay));
+  }
 
-  function doTask(operation) {
+  doTask(operation) {
     // @TODO: Apply one string modification
     const operrationArray = operation.split(" ");
     const messageData = {
-      type: operrationArray[0],
+      type: messagesTypes.update,
+      updateType: operrationArray[0],
     };
-    handleMessage(messageData);
+    this.handleMessage(messageData);
 
     // @TODO: send update to all other clients
   }
 
-  // The loop
-  for (let i = 0; i < stringOperations.length; i++) {
-    // Add a task to the event loop
-    doTask(stringOperations[i]);
+  async startClient() {
+    // The loop
+    for (let i = 0; i < this.stringOperations.length; i++) {
+      // Add a task to the event loop
+      this.doTask(this.stringOperations[i]);
 
-    // Wait some time
-    await sleep(1000);
+      // Wait some time
+      await this.sleep(1000);
+    }
   }
 
-  // Connect to clients:
-  // 1. Connect to clients with greater id
-  // 2. Start HTTP server
-  // 3. Each socket defined with callback function for handling recieved data
-  // 4. Set this client initiel vector time-stemp
-  // 5. Run loop
-  // When all given local string modifications are done- send "goodbye" message to all clients.
-  // When "goodbye" message recieved from all other clients- print this client replica and exit.
+  getId() {
+    return this.id;
+  }
 
-  // The callback function:
-  // 1. Updates this client vector time-stemp
-  // 2. Apply merge algorithm
-
-  // The loop:
-  // For each operation:
-  // 1. Add task to event loop:
-  //    * Apply one string modification
-  //    * Send the update to all clients
-  // 2. Wait some time
-}
-
-exports.client = client;
-// exports.startClient = startClient;
-// exports.connectToOtherClients = connectToOtherClients;
-// exports.createServer = createServer;
+  getPortNumber() {
+    return this.portNumber;
+  }
+};

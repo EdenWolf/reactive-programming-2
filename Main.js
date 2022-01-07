@@ -1,4 +1,5 @@
 const client = require("./Client");
+const Client = require("./Client");
 
 async function initilize() {
   const inputFilesPaths = [
@@ -30,10 +31,10 @@ async function initilize() {
     return list;
   }
 
-  const clientDataArray = [];
+  const clientsArray = [];
 
-  for (let i = 0; i < inputFilesPaths.length; i++) {
-    const data = readInputFile(inputFilesPaths[i]);
+  inputFilesPaths.forEach((path) => {
+    const data = readInputFile(path);
     const dataArray = data.replace(/\r/g, "").split("\n");
 
     const clientData = {
@@ -44,33 +45,37 @@ async function initilize() {
       stringOperations: [],
     };
 
-    clientData.clientId = dataArray.shift();
-    clientData.portNumber = dataArray.shift();
-    clientData.str = dataArray.shift();
+    const clientId = dataArray.shift();
+    const portNumber = dataArray.shift();
+    const str = dataArray.shift();
     dataArray.shift();
 
-    clientData.clientsList = getList(dataArray);
-    clientData.stringOperations = getList(dataArray);
+    const clientsList = getList(dataArray);
+    const stringOperations = getList(dataArray);
 
-    clientDataArray.push(clientData);
-    // client.startClient(clientId, portNumber, str, clientsList, stringOperations);
-  }
-
-  for (let i = 0; i < clientDataArray.length; i++) {
-    console.log("create server");
-    await client.client.createServer(
-      clientDataArray[i].clientId,
-      clientDataArray[i].portNumber
+    clientsArray.push(
+      new Client(clientId, str, portNumber, clientsList, stringOperations)
     );
-  }
+  });
 
-  for (let i = 0; i < clientDataArray.length; i++) {
-    console.log("connect to other clients");
-    await client.client.connectToOtherClients(
-      clientDataArray[i].clientId,
-      clientDataArray[i].clientsList
-    );
-  }
+  await Promise.all(
+    clientsArray.map(async (client) => {
+      await client.createServer();
+    })
+  );
+
+  await Promise.all(
+    clientsArray.map(async (client) => {
+      await client.connectToOtherClients(client.clientId, client.clientsList);
+    })
+  );
+
+  clientsArray.forEach((client) => {
+    client.startClient();
+  });
 }
 
 initilize();
+
+// var cl = new Client(1, "", 1234);
+// cl.sayHello();
