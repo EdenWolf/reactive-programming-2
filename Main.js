@@ -1,4 +1,3 @@
-const client = require("./Client");
 const Client = require("./Client");
 
 async function initilize() {
