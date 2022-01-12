@@ -1,7 +1,7 @@
 const WebSocket = require("ws");
 const log = require("./Logging");
 
-const MODE_10 = false;
+const MODE_10 = true;
 
 const messagesTypes = {
   connection: "connection",
@@ -233,18 +233,17 @@ module.exports = class Client {
       type: messagesTypes.update,
     };
     this.localUpdatesQueue.push(sendData);
-    console.log(this.localTasks.size);
     if (
-      this.localTasks.length === 0 ||
       !MODE_10 ||
+      this.stringOperations.length === 0 ||
       this.localUpdatesQueue.length >= 10
     ) {
-      this.clientsMap.forEach((client) => {
-        while (this.localUpdatesQueue.length !== 0) {
-          const sendMe = this.localUpdatesQueue.shift();
+      while (this.localUpdatesQueue.length > 0) {
+        const sendMe = this.localUpdatesQueue.shift();
+        this.clientsMap.forEach((client) => {
           client.socket.send(JSON.stringify(sendMe));
-        }
-      });
+        });
+      }
     }
   }
 
@@ -352,7 +351,7 @@ module.exports = class Client {
           this.tasksLoop();
         }
       }
-    }, 100);
+    }, 1000);
   }
 
   async startClient() {
