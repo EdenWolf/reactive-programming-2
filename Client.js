@@ -1,15 +1,12 @@
 const WebSocket = require("ws");
 const log = require("./Logging");
 
+const MODE_10 = false;
+
 const messagesTypes = {
   connection: "connection",
   goodbye: "goodbye",
   update: "update",
-};
-
-const operationTypes = {
-  insert: "insert",
-  delete: "delete",
 };
 
 const logTypes = {
@@ -22,10 +19,6 @@ const logTypes = {
   exiting: "exiting",
 };
 
-function getRandomInt() {
-  return Math.floor(Math.random() * 800) + 200;
-}
-
 module.exports = class Client {
   constructor(id, str, portNumber, clientsList, stringOperations) {
     this.id = id;
@@ -36,12 +29,15 @@ module.exports = class Client {
     this.timestemp = [0, id];
     this.server = undefined;
     this.clientsMap = new Map();
-    this.history = [
-      { operation: "", timestemp: this.timestemp, str: this.str },
-    ];
+    this.history = [{ operation: "first", timestemp: [0, 0], str: this.str }];
     this.clientsCounter = 0;
     this.biggerClients = new Map();
     this.saidGoodbye = false;
+    this.localUpdatesQueue = [];
+  }
+
+  isTs1SmallerThanTs2(ts1, ts2) {
+    return ts1[0] < ts2[0] || (ts1[0] === ts2[0] && ts1[1] < ts2[1]);
   }
 
   /**********
@@ -79,10 +75,100 @@ module.exports = class Client {
       this.clientsCounter--;
     },
     update: (data) => {
+      let logData = { ...data, clientId: this.id };
+      log(logTypes.receivedUpdate, logData);
+
+      const historyStack = [];
+
+      // put all the newer updates in the queue
+
+      while (
+        this.history.length > 1 &&
+        this.isTs1SmallerThanTs2(
+          data.timestemp,
+          this.history[this.history.length - 1].timestemp
+        )
+      ) {
+        historyStack.push(this.history.pop());
+      }
+
+      this.str = this.history[this.history.length - 1].str;
+
+      logData = {
+        clientId: this.id,
+        timestemp:
+          this.history.length > 0
+            ? this.history[this.history.length - 1].timestemp
+            : this.timestemp,
+        str: this.str,
+      };
+      log(logTypes.startedMerging, logData);
+
+      // Do the update we just got
+      let operationArray = data.operation.split(" ");
+      let newStr = this.localTasks[operationArray[0]](operationArray);
+
+      logData = {
+        operation: data.operation,
+        timestemp: data.timestemp,
+        str: newStr,
+      };
+      log(logTypes.updateOperation, logData);
+
+      // Put the update we just got in history
+      this.history.push({
+        operation: data.operation,
+        timestemp: data.timestemp,
+        str: newStr,
+      });
+
+      // Re-apply all the newer operations
+      while (historyStack.length > 0) {
+        const currantUpdate = historyStack.pop();
+        operationArray = currantUpdate.operation.split(" ");
+        newStr = this.localTasks[operationArray[0]](operationArray);
+        logData = {
+          operation: currantUpdate.operation,
+          timestemp: currantUpdate.timestemp,
+          str: newStr,
+        };
+        log(logTypes.updateOperation, logData);
+        this.history.push({ ...currantUpdate, str: newStr });
+      }
+
       this.timestemp[0] = Math.max(this.timestemp[0], data.timestemp[0]);
       this.timestemp[0]++;
-      const logData = { ...data, clientId: this.id };
-      log(logTypes.receivedUpdate, logData);
+
+      logData = {
+        clientId: this.id,
+        str: newStr,
+        timestemp: this.timestemp,
+      };
+      log(logTypes.endedMerging, logData);
+
+      for (let i = 0; i < this.history.length; i++) {
+        const tempArr = [];
+        const tsClient = this.history[i].timestemp[1];
+        for (let j = i + 1; j < this.history.length; j++) {
+          if (
+            !tempArr.includes(this.history[j].timestemp[1]) &&
+            this.history[j].timestemp[1] !== tsClient
+          ) {
+            tempArr.push(this.history[j].timestemp[1]);
+            if (tempArr.length === this.clientsList.length) {
+              const removed = this.history.splice(i, 1);
+              logData = {
+                clientId: this.id,
+                operation: removed[0].operation,
+                timestemp: removed[0].timestemp,
+              };
+              log(logTypes.removedOperation, logData);
+              i = -1;
+              break;
+            }
+          }
+        }
+      }
     },
   };
 
@@ -145,18 +231,28 @@ module.exports = class Client {
     const sendData = {
       ...data,
       type: messagesTypes.update,
-      timestemp: this.timestemp,
     };
-    this.clientsMap.forEach((client) => {
-      client.socket.send(JSON.stringify(sendData));
-    });
+    this.localUpdatesQueue.push(sendData);
+    console.log(this.localTasks.size);
+    if (
+      this.localTasks.length === 0 ||
+      !MODE_10 ||
+      this.localUpdatesQueue.length >= 10
+    ) {
+      this.clientsMap.forEach((client) => {
+        while (this.localUpdatesQueue.length !== 0) {
+          const sendMe = this.localUpdatesQueue.shift();
+          client.socket.send(JSON.stringify(sendMe));
+        }
+      });
+    }
   }
 
   sendGoodbye() {
     const logData = { clientId: this.id };
     log(logTypes.finishedLocalModifications, logData);
     const sendData = { type: messagesTypes.goodbye, clientId: this.id };
-    this.clientsMap.forEach((client, key) => {
+    this.clientsMap.forEach((client) => {
       client.socket.send(JSON.stringify(sendData));
     });
     this.saidGoodbye = true;
@@ -200,21 +296,7 @@ module.exports = class Client {
       }
 
       this.str = newStr;
-
-      this.history.push({
-        operation: operationArray.join(" "),
-        timestemp: this.timestemp,
-        str: newStr,
-      });
-
-      // Send update to all the other clients
-      this.sendUpdates({
-        senderId: this.id,
-        operation: operationArray.join(" "),
-        updateType: operationArray[0],
-        timestemp: this.timestemp,
-        str: this.str,
-      });
+      return newStr;
     },
     delete: (operationArray) => {
       let newStr = this.str;
@@ -225,21 +307,30 @@ module.exports = class Client {
       }
 
       this.str = newStr;
-
-      this.sendUpdates({
-        senderId: this.id,
-        operation: operationArray.join(" "),
-        updateType: operationArray[0],
-        timestemp: this.timestemp,
-        str: this.str,
-      });
+      return newStr;
     },
   };
 
   doTask(operation) {
-    // @TODO: Apply one string modification
+    // Apply one string modification
     const operationArray = operation.split(" ");
-    this.localTasks[operationArray[0]](operationArray);
+    const newStr = this.localTasks[operationArray[0]](operationArray);
+
+    this.timestemp[0]++;
+
+    this.history.push({
+      operation: operationArray.join(" "),
+      timestemp: [this.timestemp[0], this.timestemp[1]],
+      str: newStr,
+    });
+
+    this.sendUpdates({
+      senderId: this.id,
+      operation: operationArray.join(" "),
+      updateType: operationArray[0],
+      timestemp: [this.timestemp[0], this.timestemp[1]],
+      str: this.str,
+    });
   }
 
   tasksLoop() {
@@ -249,24 +340,19 @@ module.exports = class Client {
         this.doTask(task);
         this.tasksLoop();
       } else if (this.stringOperations.length === 0) {
-        // If this client finished all his local tasks
-        // if this client got "goodbye" from all the other clients
         if (this.clientsCounter === 0) {
-          // if he didn't say goodbye
           if (!this.saidGoodbye) {
             this.sendGoodbye();
           }
           this.exit();
-        }
-        // if this client finished all his local tasks but didn't get "goodbye" from all the other clients
-        else {
+        } else {
           if (!this.saidGoodbye) {
             this.sendGoodbye();
           }
           this.tasksLoop();
         }
       }
-    }, getRandomInt());
+    }, 100);
   }
 
   async startClient() {

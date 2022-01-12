@@ -55,11 +55,11 @@ const logTypesHandlers = {
   startedMerging: (data) =>
     `Client ${data.clientId} started merging, from ${data.timestemp[0]}.${data.timestemp[1]} time stamp, on "${data.str}"`,
   updateOperation: (data) =>
-    `operation ${data.operation}, ${data.timestemp[0]}.${data.timestemp[1]}, string: ${data.str}`,
+    `operation "${data.operation}", ${data.timestemp[0]}.${data.timestemp[1]}, string: "${data.str}"`,
   endedMerging: (data) =>
-    `Client ${data.clientId} ended merging with string ${data.str}, on timestamp ${data.timestemp[0]}.${data.timestemp[1]}`,
+    `Client ${data.clientId} ended merging with string "${data.str}", on timestamp ${data.timestemp[0]}.${data.timestemp[1]}`,
   removedOperation: (data) =>
-    `Client ${data.clientId} removed operation ${data.operation}, ${data.timestemp[0]}.${data.timestemp[1]} from storage`,
+    `Client ${data.clientId} removed operation "${data.operation}", ${data.timestemp[0]}.${data.timestemp[1]} from storage`,
   finishedLocalModifications: (data) =>
     `Client ${data.clientId} finished his local string modifications`,
   exiting: (data) => `Client ${data.clientId} is exiting`,
