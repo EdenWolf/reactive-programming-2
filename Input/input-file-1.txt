@@ -8,4 +8,18 @@ abc
 insert d
 delete 1
 insert z 1
-
+insert e
+delete 2
+insert y 2
+insert f
+delete 2
+insert x 3
+insert d
+delete 2
+insert z 1
+insert a
+delete 7
+insert s 2
+insert g
+delete 5
+insert b 3

@@ -1,7 +1,7 @@
 const WebSocket = require("ws");
 const log = require("./Logging");
 
-const MODE_10 = true;
+const MODE_10 = false;
 
 const messagesTypes = {
   connection: "connection",

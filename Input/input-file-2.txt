@@ -7,5 +7,22 @@ abc
 
 insert e
 delete 2
-insert y 2
-
+insert x 2
+insert u
+delete 1
+insert k 1
+insert n
+delete 2
+insert o 2
+insert c
+delete 3
+insert o 3
+insert m
+delete 1
+insert p 1
+insert j
+delete 2
+insert i 2
+insert q
+delete 5
+insert s 9

@@ -5,7 +5,27 @@ abc
 1 127.0.0.1 1000
 2 127.0.0.1 2000
 
-insert f
+insert d
 delete 3
-insert x 3
-
+insert a 3
+insert s
+delete 2
+insert x 2
+insert c
+delete 4
+insert v 7
+insert b
+delete 2
+insert n 5
+insert m
+delete 4
+insert j 6
+insert h
+delete 3
+insert g 4
+insert f
+delete 8
+insert d 3
+insert s
+delete 4
+insert a 5
